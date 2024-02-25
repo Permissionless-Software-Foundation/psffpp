@@ -1,6 +1,6 @@
 # psffpp
 
-This is an npm library for node.js. It implements the [PS009 specification for multisignature approval](https://github.com/Permissionless-Software-Foundation/specifications/blob/master/ps009-multisig-approval.md). The main consumers of this library of [psf-bch-wallet](https://github.com/Permissionless-Software-Foundation/psf-bch-wallet) and [ipfs-p2wdb-service](https://github.com/Permissionless-Software-Foundation/ipfs-p2wdb-service).
+This is an npm library for node.js. It implements the [PS010 specification for the PSF File Pinning Protocol](https://github.com/Permissionless-Software-Foundation/specifications/blob/master/ps009-multisig-approval.md). The main consumers of this library of [psf-bch-wallet](https://github.com/Permissionless-Software-Foundation/psf-bch-wallet) and [ipfs-p2wdb-service](https://github.com/Permissionless-Software-Foundation/ipfs-p2wdb-service).
 
 ## Instancing Library
 This library depends on [minimal-slp-wallet](https://www.npmjs.com/package/minimal-slp-wallet). An instance of that library is expected to be injected into this this one when instantiated. Here is an example:
