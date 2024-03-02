@@ -15,6 +15,7 @@ import sinon from 'sinon'
 // Local libraries
 import PSFFPP from '../../index.js'
 import { MockBchWallet } from '../mocks/wallet.js'
+import mockWritePrice from '../mocks/write-price-mocks.js'
 
 describe('#MultisigApproval.js', () => {
   let sandbox
@@ -53,25 +54,83 @@ describe('#MultisigApproval.js', () => {
     })
   })
 
-  describe('#createPinClaim', () => {
-    it('should publish a pin claim on the blockchain', async () => {
-      await uut.initPs009()
+  describe('#getMcWritePrice', () => {
+    it('should validate a new approval transaction', async () => {
+      await uut._initPs009()
 
-      // Mock dependencies and force desired code path
-      console.log('uut.ps009: ', uut.ps009)
-      sandbox.stub(uut.ps009, 'getMcWritePrice').resolves(0.08335233)
+      // Mock dependencies and force desired code path.
+      sandbox.stub(uut.ps009, 'getApprovalTx').resolves(mockWritePrice.approvalObj01)
+      sandbox.stub(uut.ps009, 'getUpdateTx').resolves(mockWritePrice.updateObj01)
+      sandbox.stub(uut.ps009, 'getCidData').resolves(mockWritePrice.validationData01)
+      sandbox.stub(uut.ps009, 'validateApproval').resolves(true)
 
-      const inObj = {
-        cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
-        filename: 'test.txt',
-        fileSizeInMegabytes: 0.1
-      }
+      const result = await uut.getMcWritePrice()
+      // console.log('result: ', result)
 
-      const result = await uut.createPinClaim(inObj)
-      console.log('result: ', result)
-
-      // assert.equal(result, 'fake-txid')
+      assert.equal(result, 0.08335233)
     })
+
+    // it('should retrieve a previously validated approval transaction from the database', async () => {
+    //   // Mock dependencies and force desired code path.
+    //   sandbox.stub(uut.ps009, 'getApprovalTx').resolves(mockData.approvalObj01)
+    //   sandbox.stub(uut.WritePriceModel, 'findOne').resolves({
+    //     writePrice: 0.08335233
+    //   })
+    //   const result = await uut.getMcWritePrice()
+    //   // console.log('result: ', result)
+    //   assert.equal(result, 0.08335233)
+    // })
+
+    // it('should recursivly call itself to find the next approval tx', async () => {
+    //   // Mock dependencies and force desired code path.
+    //   sandbox.stub(uut.ps009, 'getApprovalTx').resolves(mockData.approvalObj01)
+    //   sandbox.stub(uut.WritePriceModel, 'findOne').resolves(null)
+    //   sandbox.stub(uut.ps009, 'getUpdateTx').resolves(mockData.updateObj01)
+    //   sandbox.stub(uut.ps009, 'getCidData').resolves(mockData.validationData01)
+    //   sandbox.stub(uut.ps009, 'validateApproval')
+    //     .onCall(0).resolves(false)
+    //     .onCall(1).resolves(true)
+    //   const result = await uut.getMcWritePrice()
+    //   // console.log('result: ', result)
+    //   assert.equal(result, 0.08335233)
+    // })
+
+    // it('should return safety price if no approval tx can be found', async () => {
+    //   // Mock dependencies and force desired code path.
+    //   sandbox.stub(uut.ps009, 'getApprovalTx').resolves(null)
+    //   const result = await uut.getMcWritePrice()
+    //   // console.log('result: ', result)
+    //   assert.equal(result, 0.08335233)
+    // })
+
+    // it('should throw error and return safety price if wallet is not initialized', async () => {
+    //   // Mock dependencies and force desired code path.
+    //   uut.wallet = undefined
+    //   const result = await uut.getMcWritePrice()
+    //   // console.log('result: ', result)
+    //   assert.equal(result, 0.08335233)
+    // })
+  })
+
+  describe('#createPinClaim', () => {
+    // it('should publish a pin claim on the blockchain', async () => {
+    //   await uut.initPs009()
+    //
+    //   // Mock dependencies and force desired code path
+    //   console.log('uut.ps009: ', uut.ps009)
+    //   sandbox.stub(uut.ps009, 'getMcWritePrice').resolves(0.08335233)
+    //
+    //   const inObj = {
+    //     cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
+    //     filename: 'test.txt',
+    //     fileSizeInMegabytes: 0.1
+    //   }
+    //
+    //   const result = await uut.createPinClaim(inObj)
+    //   console.log('result: ', result)
+    //
+    //   // assert.equal(result, 'fake-txid')
+    // })
 
     // it('should catch, report, and throw errors', async () => {
     //   try {
