@@ -21,7 +21,18 @@ class PSFFPP {
     this.ps009 = null // placeholder for Multisig Approval library.
 
     // Bind the this object to all subfunctions in this class
+    this.initPs009 = this.initPs009.bind(this)
     this.createPinClaim = this.createPinClaim.bind(this)
+  }
+
+  // Initialize the PS009 Multisig Approval library if it hasn't already been
+  // initialized.
+  async initPs009 () {
+    if (!this.ps009) {
+      this.ps009 = new MultisigApproval({ wallet: this.wallet })
+    }
+
+    return true
   }
 
   // Given information about a file, this function will generate a Pin Claim,
@@ -45,10 +56,10 @@ class PSFFPP {
       await this.wallet.initialize()
 
       // Initialize the PS009 library
-      this.ps009 = new MultisigApproval({ wallet: this.wallet })
+      await this.initPs009()
 
       // Get the cost in PSF tokens to store 1MB
-      const writePrice = await this.adapters.writePrice.getMcWritePrice()
+      const writePrice = await this.ps009.getMcWritePrice()
 
       // Create a proof-of-burn (PoB) transaction
       // const WRITE_PRICE = 0.08335233 // Cost in PSF tokens to pin 1MB
@@ -138,4 +149,5 @@ class PSFFPP {
   }
 }
 
-module.exports = PSFFPP
+// module.exports = PSFFPP
+export default PSFFPP
