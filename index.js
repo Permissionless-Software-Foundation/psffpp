@@ -1,9 +1,10 @@
 /*
-  This library implement PS009 specification:
+  This library implement PS010 specification:
   https://github.com/Permissionless-Software-Foundation/specifications/blob/master/ps009-multisig-approval.md
 */
 
 // global libraries
+import MultisigApproval from 'psf-multisig-approval'
 const bitcore = require('bitcore-lib-cash')
 const axios = require('axios')
 
@@ -11,7 +12,7 @@ const axios = require('axios')
 const NFTs = require('./lib/nfts')
 const UtilLib = require('./lib/util')
 
-class MultisigApproval {
+class PSFFPP {
   constructor (localConfig = {}) {
     // Dependency Injection
     this.wallet = localConfig.wallet
@@ -32,14 +33,130 @@ class MultisigApproval {
     this.axios = axios
     this.nfts = new NFTs(localConfig)
     this.util = new UtilLib(localConfig)
+    this.ps009 = null // placeholder for Multisig Approval library.
 
     // Bind the this object to all subfunctions in this class
     this.getNftHolderInfo = this.getNftHolderInfo.bind(this)
     this.createMultisigAddress = this.createMultisigAddress.bind(this)
     this.getApprovalTx = this.getApprovalTx.bind(this)
 
+    this.createPinClaim = this.createPinClaim.bind(this)
+
     // Create a transaction details cache, to reduce the number of API calls.
     this.txCache = {}
+  }
+
+  // Given information about a file, this function will generate a Pin Claim,
+  // and return the transaction hex that can then be broadcast to the network.
+  async createPinClaim (inObj = {}) {
+    try {
+      const { cid, filename, fileSizeInMegabytes } = inObj
+
+      // Input validation
+      if (!cid) {
+        throw new Error('File CID required to generate pin claim.')
+      }
+      if (!filename) {
+        throw new Error('Filename required to generate pin claim.')
+      }
+      if (!fileSizeInMegabytes) {
+        throw new Error('File size in megabytes required to generate pin claim.')
+      }
+
+      // Initialize the wallet
+      await this.wallet.initialize()
+
+      // Initialize the PS009 library
+      this.ps009 = new MultisigApproval({ wallet: this.wallet })
+
+      // Get the cost in PSF tokens to store 1MB
+      const writePrice = await this.adapters.writePrice.getMcWritePrice()
+
+      // Create a proof-of-burn (PoB) transaction
+      // const WRITE_PRICE = 0.08335233 // Cost in PSF tokens to pin 1MB
+      const PSF_TOKEN_ID = '38e97c5d7d3585a2cbf3f9580c82ca33985f9cb0845d4dcce220cb709f9538b0'
+
+      // Calculate the write cost
+      const dataCost = writePrice * fileSizeInMegabytes
+      const minCost = writePrice
+      let actualCost = minCost
+      if (dataCost > minCost) actualCost = dataCost
+      console.log(`Burning ${actualCost} PSF tokens for ${fileSizeInMegabytes} MB of data.`)
+
+      const pobTxid = await this.wallet.burnTokens(actualCost, PSF_TOKEN_ID)
+      console.log(`Proof-of-burn TX: ${pobTxid}`)
+
+      // Get info and libraries from the wallet.
+      const addr = this.wallet.walletInfo.address
+      const bchjs = this.wallet.bchjs
+      const wif = this.wallet.walletInfo.privateKey
+
+      // Get a UTXO to spend to generate the pin claim TX.
+      let utxos = await this.wallet.getUtxos()
+      utxos = utxos.bchUtxos
+      const utxo = bchjs.Utxo.findBiggestUtxo(utxos)
+
+      // instance of transaction builder
+      const transactionBuilder = new bchjs.TransactionBuilder()
+
+      const originalAmount = utxo.value
+      const vout = utxo.tx_pos
+      const txid = utxo.tx_hash
+
+      // add input with txid and index of vout
+      transactionBuilder.addInput(txid, vout)
+
+      // TODO: Compute the 1 sat/byte fee.
+      const fee = 500
+
+      // BEGIN - Construction of OP_RETURN transaction.
+
+      // Add the OP_RETURN to the transaction.
+      const script = [
+        bchjs.Script.opcodes.OP_RETURN,
+        Buffer.from('00510000', 'hex'),
+        Buffer.from(pobTxid, 'hex'),
+        Buffer.from(cid),
+        Buffer.from(filename)
+      ]
+
+      // Compile the script array into a bitcoin-compliant hex encoded string.
+      const data = bchjs.Script.encode(script)
+
+      // Add the OP_RETURN output.
+      transactionBuilder.addOutput(data, 0)
+
+      // END - Construction of OP_RETURN transaction.
+
+      // Send the same amount - fee.
+      transactionBuilder.addOutput(addr, originalAmount - fee)
+
+      // Create an EC Key Pair from the user-supplied WIF.
+      const ecPair = bchjs.ECPair.fromWIF(wif)
+
+      // Sign the transaction with the HD node.
+      let redeemScript
+      transactionBuilder.sign(
+        0,
+        ecPair,
+        redeemScript,
+        transactionBuilder.hashTypes.SIGHASH_ALL,
+        originalAmount
+      )
+
+      // build tx
+      const tx = transactionBuilder.build()
+
+      // output rawhex
+      const hex = tx.toHex()
+      // console.log(`TX hex: ${hex}`);
+      // console.log(` `);
+
+      return hex
+    } catch (err) {
+      console.error('Error in ps010/createPinClaim()')
+      throw err
+    }
   }
 
   // This function retrieves the NFTs associated with a Group token ID. It then
@@ -326,4 +443,4 @@ class MultisigApproval {
   }
 }
 
-module.exports = MultisigApproval
+module.exports = PSFFPP
