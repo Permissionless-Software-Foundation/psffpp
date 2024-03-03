@@ -8,11 +8,11 @@ This is an npm library for node.js. It implements the [PS010 specification for t
 - [psf-bch-wallet](https://github.com/Permissionless-Software-Foundation/psf-bch-wallet) is a command-line UI that uses this library to add files to the network.
 
 ## Instancing Library
-This library depends on the [minimal-slp-wallet](https://www.npmjs.com/package/minimal-slp-wallet) and [psf-multisig-approval](https://www.npmjs.com/package/psf-multisig-approval) libraries. An instance of minimal-slp-wallet is expected to be injected into this library when instantiated. Here is an example:
+This library depends on the [minimal-slp-wallet](https://www.npmjs.com/package/minimal-slp-wallet) and [psf-multisig-approval](https://www.npmjs.com/package/psf-multisig-approval) libraries. An instance of minimal-slp-wallet is expected to be injected into this library when it is instantiated. Here is an example:
 
 ```javascript
-const SlpWallet = require('minimal-slp-wallet')
-const PSFFPP = require('psffpp')
+import SlpWallet from 'minimal-slp-wallet'
+import PSFFPP from 'psffpp'
 
 async function start() {
   // Instance the BCH wallet
@@ -30,12 +30,17 @@ start()
 
 ## Get the Write Price
 
-Retrieve the current cost-per-megabyte in PSF tokens, for writing data to the network. *Note: that the minimum cost is 1MB, even if you upload a file smaller than that to the pinning network.*
+Retrieve the current cost-per-megabyte in PSF tokens, for writing data to the network.
+
+*Note: The minimum cost is 1MB, even if you upload a file smaller than that to the file pinning network.*
 
 ```javascript
 const writePrice = await psffpp.getMcWritePrice()
 console.log(writePrice)
-// Example output: 0.08335233
+
+/*
+  0.08335233
+*/
 ```
 
 ## Create a Pin Claim
@@ -58,8 +63,13 @@ const pinObj = {
 }
 
 const {pobTxid, claimTxid} = await psffpp.createPinClaim(pinObj)
-console.log(pobTxid)
-console.log(claimTxid)
+console.log('pobTxid: ', pobTxid)
+console.log('claimTxid: ', claimTxid)
+
+/*
+pobTxid: f1ff81aaac7f755875306e31c9137b2bb010587feffeb4c7d42b462ef08db0df
+claimTxid: db338fdb7edc6ce6685c9897a9d9fd6f0e26d194bf12e1c87470b7dc2103a3e3
+*/
 ```
 
 
