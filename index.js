@@ -31,6 +31,7 @@ class PSFFPP {
 
     // State
     this.currentWritePrice = null
+    this.filterTxids = []
   }
 
   // Initialize the PS009 Multisig Approval library if it hasn't already been
@@ -62,10 +63,9 @@ class PSFFPP {
 
       // Find the PS009 approval transaction the addresses tx history.
       console.log('\nSearching blockchain for updated write price...')
-      const filterTxids = []
       const approvalObj = await this.ps009.getApprovalTx({
         address: WRITE_PRICE_ADDR,
-        filterTxids
+        filterTxids: this.filterTxids
       })
       // console.log('approvalObj: ', JSON.stringify(approvalObj, null, 2))
 
@@ -102,14 +102,16 @@ class PSFFPP {
       } else {
         // Approval transaction failed validation.
         console.log(`Approval TXID was found to be invalid: ${approvalTxid}`)
+
         // Add this invalid TXID to the filter array so that it is skipped.
         this.filterTxids.push(approvalTxid)
+
         // Continue looking for the correct approval transaction by recursivly
         // calling this function.
         writePrice = await this.getMcWritePrice()
       }
     } catch (err) {
-      console.error('Error in getMcWritePrice(): ', err)
+      console.error('Error in getMcWritePrice()')
       console.log(`Using hard-coded, safety value of ${writePrice} PSF tokens per write.`)
     }
     // Save the curent write price to the state.
@@ -117,21 +119,23 @@ class PSFFPP {
     return writePrice
   }
 
-  // Given information about a file, this function will generate a Pin Claim,
-  // and return the transaction hex that can then be broadcast to the network.
+  // Given information about a file, this function will generate a Pin Claim.
+  // This function takes controls of the wallet and uses it to broadcast two
+  // transactions: a Proof-of-Burn (pobTxid) and a Pin Claim (climTxid). The
+  // function returns an object with the transaction ID of those two transacions.
   async createPinClaim (inObj = {}) {
     try {
       const { cid, filename, fileSizeInMegabytes } = inObj
 
       // Input validation
       if (!cid) {
-        throw new Error('File CID required to generate pin claim.')
+        throw new Error('cid required to generate pin claim.')
       }
       if (!filename) {
-        throw new Error('Filename required to generate pin claim.')
+        throw new Error('filename required to generate pin claim.')
       }
       if (!fileSizeInMegabytes) {
-        throw new Error('File size in megabytes required to generate pin claim.')
+        throw new Error('fileSizeInMegabytes size in megabytes required to generate pin claim.')
       }
 
       // Initialize the wallet
@@ -141,7 +145,7 @@ class PSFFPP {
       await this._initPs009()
 
       // Get the cost in PSF tokens to store 1MB
-      const writePrice = await this.ps009.getMcWritePrice()
+      const writePrice = await this.getMcWritePrice()
 
       // Create a proof-of-burn (PoB) transaction
       // const WRITE_PRICE = 0.08335233 // Cost in PSF tokens to pin 1MB
@@ -155,7 +159,7 @@ class PSFFPP {
       console.log(`Burning ${actualCost} PSF tokens for ${fileSizeInMegabytes} MB of data.`)
 
       const pobTxid = await this.wallet.burnTokens(actualCost, PSF_TOKEN_ID)
-      console.log(`Proof-of-burn TX: ${pobTxid}`)
+      // console.log(`Proof-of-burn TX: ${pobTxid}`)
 
       // Get info and libraries from the wallet.
       const addr = this.wallet.walletInfo.address
@@ -223,7 +227,15 @@ class PSFFPP {
       // console.log(`TX hex: ${hex}`);
       // console.log(` `);
 
-      return hex
+      // Broadcast transation to the network
+      const claimTxid = await this.wallet.broadcast({ hex })
+      // console.log(`Claim Transaction ID: ${claimTxid}`)
+      // console.log(`https://blockchair.com/bitcoin-cash/transaction/${claimTxid}`)
+
+      return {
+        pobTxid,
+        claimTxid
+      }
     } catch (err) {
       console.error('Error in ps010/createPinClaim()')
       throw err

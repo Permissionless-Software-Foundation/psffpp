@@ -17,16 +17,11 @@ import PSFFPP from '../../index.js'
 import { MockBchWallet } from '../mocks/wallet.js'
 import mockWritePrice from '../mocks/write-price-mocks.js'
 
-describe('#MultisigApproval.js', () => {
+describe('#PSFFPP-index.js', () => {
   let sandbox
   // let mockData
   let uut
   let wallet
-
-  // before(async () => {
-  //   wallet = new SlpWallet(undefined, { interface: 'consumer-api' })
-  //   await wallet.walletInfoPromise
-  // })
 
   beforeEach(() => {
     // Restore the sandbox before each test.
@@ -70,79 +65,120 @@ describe('#MultisigApproval.js', () => {
       assert.equal(result, 0.08335233)
     })
 
-    // it('should retrieve a previously validated approval transaction from the database', async () => {
-    //   // Mock dependencies and force desired code path.
-    //   sandbox.stub(uut.ps009, 'getApprovalTx').resolves(mockData.approvalObj01)
-    //   sandbox.stub(uut.WritePriceModel, 'findOne').resolves({
-    //     writePrice: 0.08335233
-    //   })
-    //   const result = await uut.getMcWritePrice()
-    //   // console.log('result: ', result)
-    //   assert.equal(result, 0.08335233)
-    // })
+    it('should recursivly call itself to find the next approval tx', async () => {
+      await uut._initPs009()
 
-    // it('should recursivly call itself to find the next approval tx', async () => {
-    //   // Mock dependencies and force desired code path.
-    //   sandbox.stub(uut.ps009, 'getApprovalTx').resolves(mockData.approvalObj01)
-    //   sandbox.stub(uut.WritePriceModel, 'findOne').resolves(null)
-    //   sandbox.stub(uut.ps009, 'getUpdateTx').resolves(mockData.updateObj01)
-    //   sandbox.stub(uut.ps009, 'getCidData').resolves(mockData.validationData01)
-    //   sandbox.stub(uut.ps009, 'validateApproval')
-    //     .onCall(0).resolves(false)
-    //     .onCall(1).resolves(true)
-    //   const result = await uut.getMcWritePrice()
-    //   // console.log('result: ', result)
-    //   assert.equal(result, 0.08335233)
-    // })
+      // Mock dependencies and force desired code path.
+      sandbox.stub(uut.ps009, 'getApprovalTx').resolves(mockWritePrice.approvalObj01)
+      sandbox.stub(uut.ps009, 'getUpdateTx').resolves(mockWritePrice.updateObj01)
+      sandbox.stub(uut.ps009, 'getCidData').resolves(mockWritePrice.validationData01)
+      sandbox.stub(uut.ps009, 'validateApproval')
+        .onCall(0).resolves(false)
+        .onCall(1).resolves(true)
 
-    // it('should return safety price if no approval tx can be found', async () => {
-    //   // Mock dependencies and force desired code path.
-    //   sandbox.stub(uut.ps009, 'getApprovalTx').resolves(null)
-    //   const result = await uut.getMcWritePrice()
-    //   // console.log('result: ', result)
-    //   assert.equal(result, 0.08335233)
-    // })
+      const result = await uut.getMcWritePrice()
+      // console.log('result: ', result)
 
-    // it('should throw error and return safety price if wallet is not initialized', async () => {
-    //   // Mock dependencies and force desired code path.
-    //   uut.wallet = undefined
-    //   const result = await uut.getMcWritePrice()
-    //   // console.log('result: ', result)
-    //   assert.equal(result, 0.08335233)
-    // })
+      assert.equal(result, 0.08335233)
+    })
+
+    it('should return safety price if no approval tx can be found', async () => {
+      await uut._initPs009()
+
+      // Mock dependencies and force desired code path.
+      sandbox.stub(uut.ps009, 'getApprovalTx').resolves(null)
+
+      const result = await uut.getMcWritePrice()
+      // console.log('result: ', result)
+
+      assert.equal(result, 0.08335233)
+    })
+
+    it('should throw error and return safety price if wallet is not initialized', async () => {
+      // Mock dependencies and force desired code path.
+      sandbox.stub(uut, '_initPs009').rejects(new Error('test error'))
+
+      const result = await uut.getMcWritePrice()
+      // console.log('result: ', result)
+      assert.equal(result, 0.08335233)
+    })
   })
 
   describe('#createPinClaim', () => {
-    // it('should publish a pin claim on the blockchain', async () => {
-    //   await uut.initPs009()
-    //
-    //   // Mock dependencies and force desired code path
-    //   console.log('uut.ps009: ', uut.ps009)
-    //   sandbox.stub(uut.ps009, 'getMcWritePrice').resolves(0.08335233)
-    //
-    //   const inObj = {
-    //     cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
-    //     filename: 'test.txt',
-    //     fileSizeInMegabytes: 0.1
-    //   }
-    //
-    //   const result = await uut.createPinClaim(inObj)
-    //   console.log('result: ', result)
-    //
-    //   // assert.equal(result, 'fake-txid')
-    // })
+    it('should publish a pin claim on the blockchain', async () => {
+      await uut._initPs009()
 
-    // it('should catch, report, and throw errors', async () => {
-    //   try {
-    //     uut.SlpWallet = class SlpWallet { constructor () { throw new Error('test error') }}
-    //
-    //     await uut.createPinClaim()
-    //
-    //     assert.fail('Unexpected code path')
-    //   } catch (err) {
-    //     // console.log('err.message: ', err.message)
-    //     assert.include(err.message, 'test error')
-    //   }
-    // })
+      // Mock dependencies and force desired code path
+      sandbox.stub(uut, 'getMcWritePrice').resolves(0.08335233)
+
+      const inObj = {
+        cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
+        filename: 'test.txt',
+        fileSizeInMegabytes: 0.1
+      }
+
+      const result = await uut.createPinClaim(inObj)
+      // console.log('result: ', result)
+
+      assert.property(result, 'pobTxid')
+      assert.property(result, 'claimTxid')
+    })
+
+    it('should catch, report, and throw errors', async () => {
+      try {
+        await uut._initPs009()
+
+        // Mock dependencies and force desired code path
+        sandbox.stub(uut, 'getMcWritePrice').rejects(new Error('test error'))
+
+        const inObj = {
+          cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
+          filename: 'test.txt',
+          fileSizeInMegabytes: 0.1
+        }
+
+        await uut.createPinClaim(inObj)
+
+        assert.fail('Unexpected code path')
+      } catch (err) {
+        // console.log('err.message: ', err.message)
+        assert.include(err.message, 'test error')
+      }
+    })
+
+    it('should throw error if CID is not included', async () => {
+      try {
+        await uut.createPinClaim()
+
+        assert.fail('Unexpected code path')
+      } catch (err) {
+        assert.include(err.message, 'cid required to generate pin claim.')
+      }
+    })
+
+    it('should throw error if filename is not included', async () => {
+      try {
+        await uut.createPinClaim({
+          cid: 'fake-cide'
+        })
+
+        assert.fail('Unexpected code path')
+      } catch (err) {
+        assert.include(err.message, 'filename required to generate pin claim.')
+      }
+    })
+
+    it('should throw error if file size is not included', async () => {
+      try {
+        await uut.createPinClaim({
+          cid: 'fake-cide',
+          filename: 'fake-filename'
+        })
+
+        assert.fail('Unexpected code path')
+      } catch (err) {
+        assert.include(err.message, 'fileSizeInMegabytes size in megabytes required to generate pin claim.')
+      }
+    })
   })
 })
