@@ -8,7 +8,7 @@ This is an npm library for node.js. It implements the [PS010 specification for t
 - [psf-bch-wallet](https://github.com/Permissionless-Software-Foundation/psf-bch-wallet) is a command-line UI that uses this library to add files to the network.
 
 ## Instancing Library
-This library depends on [minimal-slp-wallet](https://www.npmjs.com/package/minimal-slp-wallet). An instance of that library is expected to be injected into this this one when instantiated. Here is an example:
+This library depends on the [minimal-slp-wallet](https://www.npmjs.com/package/minimal-slp-wallet) and [psf-multisig-approval](https://www.npmjs.com/package/psf-multisig-approval) libraries. An instance of minimal-slp-wallet is expected to be injected into this library when instantiated. Here is an example:
 
 ```javascript
 const SlpWallet = require('minimal-slp-wallet')
