@@ -223,8 +223,8 @@ class PSFFPP {
       const tx = transactionBuilder.build()
 
       // output rawhex
-      const hex = tx.toHex()
-      // console.log(`TX hex: ${hex}`);
+      const hex = tx.toHex().toString()
+      console.log(`TX hex: ${hex}`)
       // console.log(` `);
 
       // Broadcast transation to the network
