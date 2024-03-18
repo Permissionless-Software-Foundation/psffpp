@@ -224,8 +224,7 @@ class PSFFPP {
 
       // output rawhex
       const hex = tx.toHex().toString()
-      console.log(`TX hex: ${hex}`)
-      // console.log(` `);
+      // console.log(`TX hex: ${hex}`)
 
       // Broadcast transation to the network
       const claimTxid = await this.wallet.broadcast({ hex })
