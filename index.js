@@ -124,6 +124,8 @@ class PSFFPP {
   // transactions: a Proof-of-Burn (pobTxid) and a Pin Claim (climTxid). The
   // function returns an object with the transaction ID of those two transacions.
   async createPinClaim (inObj = {}) {
+    let targetAddr
+
     try {
       const { cid, filename, fileSizeInMegabytes } = inObj
 
@@ -163,6 +165,7 @@ class PSFFPP {
 
       // Get info and libraries from the wallet.
       const addr = this.wallet.walletInfo.address
+      targetAddr = addr
       const bchjs = this.wallet.bchjs
       const wif = this.wallet.walletInfo.privateKey
 
@@ -236,7 +239,7 @@ class PSFFPP {
         claimTxid
       }
     } catch (err) {
-      console.error('Error in ps010/createPinClaim()')
+      console.error(`Error in psffpp/createPinClaim() with target addr ${targetAddr}`)
       throw err
     }
   }
