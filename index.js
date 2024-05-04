@@ -153,6 +153,12 @@ class PSFFPP {
       // const WRITE_PRICE = 0.08335233 // Cost in PSF tokens to pin 1MB
       const PSF_TOKEN_ID = '38e97c5d7d3585a2cbf3f9580c82ca33985f9cb0845d4dcce220cb709f9538b0'
 
+      // Get info and libraries from the wallet.
+      const addr = this.wallet.walletInfo.address
+      targetAddr = addr
+      const bchjs = this.wallet.bchjs
+      const wif = this.wallet.walletInfo.privateKey
+
       // Calculate the write cost
       const dataCost = writePrice * fileSizeInMegabytes
       const minCost = writePrice
@@ -162,12 +168,6 @@ class PSFFPP {
 
       const pobTxid = await this.wallet.burnTokens(actualCost, PSF_TOKEN_ID)
       // console.log(`Proof-of-burn TX: ${pobTxid}`)
-
-      // Get info and libraries from the wallet.
-      const addr = this.wallet.walletInfo.address
-      targetAddr = addr
-      const bchjs = this.wallet.bchjs
-      const wif = this.wallet.walletInfo.privateKey
 
       // Get a UTXO to spend to generate the pin claim TX.
       let utxos = await this.wallet.getUtxos()
