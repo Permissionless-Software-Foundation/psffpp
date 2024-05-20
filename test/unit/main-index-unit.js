@@ -110,6 +110,7 @@ describe('#PSFFPP-index.js', () => {
 
       // Mock dependencies and force desired code path
       sandbox.stub(uut, 'getMcWritePrice').resolves(0.08335233)
+      sandbox.stub(uut.bchjs.Util, 'sleep').resolves(true)
 
       const inObj = {
         cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
