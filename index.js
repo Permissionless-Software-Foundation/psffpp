@@ -167,7 +167,10 @@ class PSFFPP {
       console.log(`Burning ${actualCost} PSF tokens for ${fileSizeInMegabytes} MB of data.`)
 
       const pobTxid = await this.wallet.burnTokens(actualCost, PSF_TOKEN_ID)
-      // console.log(`Proof-of-burn TX: ${pobTxid}`)
+      // console.log(`Proof-of-burn TX: ${pobT  xid}`)
+
+      // Wait for the indexer to update before get utxos.
+      await this.bchjs.Util.sleep(4000)
 
       // Get a UTXO to spend to generate the pin claim TX.
       let utxos = await this.wallet.getUtxos()
