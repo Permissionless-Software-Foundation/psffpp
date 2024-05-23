@@ -170,7 +170,7 @@ class PSFFPP {
       // console.log(`Proof-of-burn TX: ${pobT  xid}`)
 
       // Wait for the indexer to update before get utxos.
-      await this.bchjs.Util.sleep(4000)
+      await this.bchjs.Util.sleep(6000)
 
       // Get a UTXO to spend to generate the pin claim TX.
       let utxos = await this.wallet.getUtxos()
