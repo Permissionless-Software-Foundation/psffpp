@@ -1,12 +1,15 @@
-/*>
+/* >
   This example shows how to get the current write price set by the PSF Minting Council.
 */
 
 import SlpWallet from 'minimal-slp-wallet'
 import PSFFPP from '../index.js'
 
-async function start() {
+async function start () {
   try {
+    let now = new Date()
+    console.log('Start time: ', now.toLocaleString())
+
     // Instance the BCH wallet
     const wallet = new SlpWallet(undefined, {
       interface: 'consumer-api',
@@ -15,14 +18,25 @@ async function start() {
     await wallet.initialize()
 
     // Instance this library
-    const psffpp = new PSFFPP({wallet})
+    const psffpp = new PSFFPP({ wallet })
+
+    now = new Date()
+    console.log(`1st write price lookup started at ${now.toLocaleString()}`)
 
     // Get the current write price
     const writePrice = await psffpp.getMcWritePrice()
-    console.log('writePrice: ', writePrice)
-    
-    
-  } catch(err) {
+    console.log('1st writePrice: ', writePrice)
+
+    now = new Date()
+    console.log(`2nd write price lookup started at ${now.toLocaleString()}`)
+
+    // Get the current write price
+    const writePrice2 = await psffpp.getMcWritePrice()
+    console.log('2nd writePrice: ', writePrice2)
+
+    now = new Date()
+    console.log(`Finished at ${now.toLocaleString()}`)
+  } catch (err) {
     console.error(err)
   }
 }
