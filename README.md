@@ -3,7 +3,7 @@
 PSFFPP = [Permissionless Software Foundation](https://psfoundation.info) [File Pinning Protocol](https://psffpp.com).
 
 This is an npm library for node.js. It implements the [PS010 specification for the PSF File Pinning Protocol](https://github.com/Permissionless-Software-Foundation/specifications/blob/master/ps009-multisig-approval.md). The main consumers of this library is:
-- [p2wdb-image-upload-backend](https://github.com/Permissionless-Software-Foundation/p2wdb-image-upload-backend) uses it generate Pin Claims for file uploads as demonstrated at [upload.psfoundation.info](https://upload.psfoundation.info).
+
 - [ipfs-file-pin-service](https://github.com/Permissionless-Software-Foundation/ipfs-file-pin-service) uses it to verify Pin Claims before pinning the files.
 - [psf-bch-wallet](https://github.com/Permissionless-Software-Foundation/psf-bch-wallet) is a command-line UI that uses this library to add files to the network.
 
