@@ -111,7 +111,7 @@ class PSFFPP {
         writePrice = await this.getMcWritePrice()
       }
     } catch (err) {
-      console.error('Error in getMcWritePrice()')
+      console.error('Error in getMcWritePrice(): ', err)
       console.log(`Using hard-coded, safety value of ${writePrice} PSF tokens per write.`)
     }
     // Save the curent write price to the state.
