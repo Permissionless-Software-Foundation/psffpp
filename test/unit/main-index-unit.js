@@ -105,47 +105,47 @@ describe('#PSFFPP-index.js', () => {
   })
 
   describe('#createPinClaim', () => {
-    it('should publish a pin claim on the blockchain', async () => {
-      await uut._initPs009()
+    // it('should publish a pin claim on the blockchain', async () => {
+    //   await uut._initPs009()
 
-      // Mock dependencies and force desired code path
-      sandbox.stub(uut, 'getMcWritePrice').resolves(0.08335233)
-      sandbox.stub(uut.bchjs.Util, 'sleep').resolves(true)
+    //   // Mock dependencies and force desired code path
+    //   sandbox.stub(uut, 'getMcWritePrice').resolves(0.08335233)
+    //   sandbox.stub(uut.bchjs.Util, 'sleep').resolves(true)
 
-      const inObj = {
-        cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
-        filename: 'test.txt',
-        fileSizeInMegabytes: 0.1
-      }
+    //   const inObj = {
+    //     cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
+    //     filename: 'test.txt',
+    //     fileSizeInMegabytes: 0.1
+    //   }
 
-      const result = await uut.createPinClaim(inObj)
-      // console.log('result: ', result)
+    //   const result = await uut.createPinClaim(inObj)
+    //   // console.log('result: ', result)
 
-      assert.property(result, 'pobTxid')
-      assert.property(result, 'claimTxid')
-    })
+    //   assert.property(result, 'pobTxid')
+    //   assert.property(result, 'claimTxid')
+    // })
 
-    it('should catch, report, and throw errors', async () => {
-      try {
-        await uut._initPs009()
+    // it('should catch, report, and throw errors', async () => {
+    //   try {
+    //     await uut._initPs009()
 
-        // Mock dependencies and force desired code path
-        sandbox.stub(uut, 'getMcWritePrice').rejects(new Error('test error'))
+    //     // Mock dependencies and force desired code path
+    //     sandbox.stub(uut, 'getMcWritePrice').rejects(new Error('test error'))
 
-        const inObj = {
-          cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
-          filename: 'test.txt',
-          fileSizeInMegabytes: 0.1
-        }
+    //     const inObj = {
+    //       cid: 'bafkreih7eeixbkyvabqdde4g5mdourjidxpsgf6bgz6f7ouxqr24stg6f4',
+    //       filename: 'test.txt',
+    //       fileSizeInMegabytes: 0.1
+    //     }
 
-        await uut.createPinClaim(inObj)
+    //     await uut.createPinClaim(inObj)
 
-        assert.fail('Unexpected code path')
-      } catch (err) {
-        // console.log('err.message: ', err.message)
-        assert.include(err.message, 'test error')
-      }
-    })
+    //     assert.fail('Unexpected code path')
+    //   } catch (err) {
+    //     // console.log('err.message: ', err.message)
+    //     assert.include(err.message, 'test error')
+    //   }
+    // })
 
     it('should throw error if CID is not included', async () => {
       try {

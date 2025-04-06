@@ -147,7 +147,8 @@ class PSFFPP {
       await this._initPs009()
 
       // Get the cost in PSF tokens to store 1MB
-      const writePrice = await this.getMcWritePrice()
+      // const writePrice = await this.getMcWritePrice()
+      const writePrice = await this.wallet.getPsfWritePrice()
 
       // Create a proof-of-burn (PoB) transaction
       // const WRITE_PRICE = 0.08335233 // Cost in PSF tokens to pin 1MB
