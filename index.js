@@ -95,13 +95,13 @@ class PSFFPP {
       })
 
       if (approvalIsValid) {
-        console.log('Approval TXID validated.')
+        console.log('Approval TX validated.')
 
         // Return the write price from the update data.
         writePrice = updateData.p2wdbWritePrice
       } else {
         // Approval transaction failed validation.
-        console.log(`Approval TXID was found to be invalid: ${approvalTxid}`)
+        console.log(`Approval TX was found to be invalid: ${approvalTxid}`)
 
         // Add this invalid TXID to the filter array so that it is skipped.
         this.filterTxids.push(approvalTxid)
