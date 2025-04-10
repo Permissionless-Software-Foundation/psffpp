@@ -26,8 +26,9 @@ class PSFFPP {
 
     // Bind the this object to all subfunctions in this class
     this._initPs009 = this._initPs009.bind(this)
-    this.getMcWritePrice = this.getMcWritePrice.bind(this)
     this.createPinClaim = this.createPinClaim.bind(this)
+    this.getMcWritePrice = this.getMcWritePrice.bind(this)
+    this.getWritePriceHistory = this.getWritePriceHistory.bind(this)
 
     // State
     this.currentWritePrice = null
@@ -42,82 +43,6 @@ class PSFFPP {
     }
 
     return true
-  }
-
-  // Get the write price set by the PSF Minting Council.
-  // This function assumes the transaction history retrieved from the Cash
-  // Stack is sorted in descending order with the biggest (newest) block
-  // in the first element in the transaction history array.
-  async getMcWritePrice () {
-    // Hard codeded value. 3/2/24
-    // This value is returned if there are any issues returning the write price.
-    // It should be higher than actual fee, so that any writes will propegate to
-    // the nodes that successfully retrieved the current write price.
-    let writePrice = PSF_HARDCODE_WRITE_PRICE
-
-    try {
-      // Return the saved write price if this function has already been called once.
-      if (this.currentWritePrice) return this.currentWritePrice
-
-      await this._initPs009()
-
-      // Find the PS009 approval transaction the addresses tx history.
-      console.log('\nSearching blockchain for updated write price...')
-      const approvalObj = await this.ps009.getApprovalTx({
-        address: WRITE_PRICE_ADDR,
-        filterTxids: this.filterTxids
-      })
-      // console.log('approvalObj: ', JSON.stringify(approvalObj, null, 2))
-
-      // Throw an error if no approval transaction can be found in the
-      // transaction history.
-      if (approvalObj === null) {
-        throw new Error(`APPROVAL transaction could not be found in the TX history of ${WRITE_PRICE_ADDR}. Can not reach consensus on write price.`)
-      }
-
-      const { approvalTxid, updateTxid } = approvalObj
-      console.log(`New approval txid found (${approvalTxid}), validating...`)
-
-      // Get the CID from the update transaction.
-      const updateObj = await this.ps009.getUpdateTx({ txid: updateTxid })
-      // console.log(`updateObj: ${JSON.stringify(updateObj, null, 2)}`)
-      const { cid } = updateObj
-
-      // Resolve the CID into JSON data from the IPFS gateway.
-      const updateData = await this.ps009.getCidData({ cid })
-      // console.log(`updateData: ${JSON.stringify(updateData, null, 2)}`)
-
-      // Validate the approval transaction
-      const approvalIsValid = await this.ps009.validateApproval({
-        approvalObj,
-        updateObj,
-        updateData
-      })
-
-      if (approvalIsValid) {
-        console.log('Approval TX validated.')
-        // console.log('updateData: ', updateData)
-
-        // Return the write price from the update data.
-        writePrice = updateData.p2wdbWritePrice || updateData.writePrice
-      } else {
-        // Approval transaction failed validation.
-        console.log(`Approval TX was found to be invalid: ${approvalTxid}`)
-
-        // Add this invalid TXID to the filter array so that it is skipped.
-        this.filterTxids.push(approvalTxid)
-
-        // Continue looking for the correct approval transaction by recursivly
-        // calling this function.
-        writePrice = await this.getMcWritePrice()
-      }
-    } catch (err) {
-      console.error('Error in getMcWritePrice(): ', err)
-      console.log(`Using hard-coded, safety value of ${writePrice} PSF tokens per write.`)
-    }
-    // Save the curent write price to the state.
-    this.currentWritePrice = writePrice
-    return writePrice
   }
 
   // Given information about a file, this function will generate a Pin Claim.
@@ -245,6 +170,95 @@ class PSFFPP {
       }
     } catch (err) {
       console.error(`Error in psffpp/createPinClaim() with target addr ${targetAddr}`)
+      throw err
+    }
+  }
+
+  // Get the write price set by the PSF Minting Council.
+  // This function assumes the transaction history retrieved from the Cash
+  // Stack is sorted in descending order with the biggest (newest) block
+  // in the first element in the transaction history array.
+  async getMcWritePrice () {
+    // Hard codeded value. 3/2/24
+    // This value is returned if there are any issues returning the write price.
+    // It should be higher than actual fee, so that any writes will propegate to
+    // the nodes that successfully retrieved the current write price.
+    let writePrice = PSF_HARDCODE_WRITE_PRICE
+
+    try {
+      // Return the saved write price if this function has already been called once.
+      if (this.currentWritePrice) return this.currentWritePrice
+
+      await this._initPs009()
+
+      // Find the PS009 approval transaction the addresses tx history.
+      console.log('\nSearching blockchain for updated write price...')
+      const approvalObj = await this.ps009.getApprovalTx({
+        address: WRITE_PRICE_ADDR,
+        filterTxids: this.filterTxids
+      })
+      // console.log('approvalObj: ', JSON.stringify(approvalObj, null, 2))
+
+      // Throw an error if no approval transaction can be found in the
+      // transaction history.
+      if (approvalObj === null) {
+        throw new Error(`APPROVAL transaction could not be found in the TX history of ${WRITE_PRICE_ADDR}. Can not reach consensus on write price.`)
+      }
+
+      const { approvalTxid, updateTxid } = approvalObj
+      console.log(`New approval txid found (${approvalTxid}), validating...`)
+
+      // Get the CID from the update transaction.
+      const updateObj = await this.ps009.getUpdateTx({ txid: updateTxid })
+      // console.log(`updateObj: ${JSON.stringify(updateObj, null, 2)}`)
+      const { cid } = updateObj
+
+      // Resolve the CID into JSON data from the IPFS gateway.
+      const updateData = await this.ps009.getCidData({ cid })
+      // console.log(`updateData: ${JSON.stringify(updateData, null, 2)}`)
+
+      // Validate the approval transaction
+      const approvalIsValid = await this.ps009.validateApproval({
+        approvalObj,
+        updateObj,
+        updateData
+      })
+
+      if (approvalIsValid) {
+        console.log('Approval TX validated.')
+        // console.log('updateData: ', updateData)
+
+        // Return the write price from the update data.
+        writePrice = updateData.p2wdbWritePrice || updateData.writePrice
+      } else {
+        // Approval transaction failed validation.
+        console.log(`Approval TX was found to be invalid: ${approvalTxid}`)
+
+        // Add this invalid TXID to the filter array so that it is skipped.
+        this.filterTxids.push(approvalTxid)
+
+        // Continue looking for the correct approval transaction by recursivly
+        // calling this function.
+        writePrice = await this.getMcWritePrice()
+      }
+    } catch (err) {
+      console.error('Error in getMcWritePrice(): ', err)
+      console.log(`Using hard-coded, safety value of ${writePrice} PSF tokens per write.`)
+    }
+    // Save the curent write price to the state.
+    this.currentWritePrice = writePrice
+    return writePrice
+  }
+
+  // Get the write price history from the PSF Minting Council.
+  // Where getMcWritePrice() gets the current write price, this function
+  // returns an array of objects. Each object contains a validated
+  // price change, and the block height when the change took effect.
+  async getWritePriceHistory () {
+    try {
+      // Get the current write price.
+    } catch (err) {
+      console.error('Error in getWritePriceHistory(): ', err)
       throw err
     }
   }
