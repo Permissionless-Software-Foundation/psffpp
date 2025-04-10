@@ -96,9 +96,10 @@ class PSFFPP {
 
       if (approvalIsValid) {
         console.log('Approval TX validated.')
+        // console.log('updateData: ', updateData)
 
         // Return the write price from the update data.
-        writePrice = updateData.p2wdbWritePrice
+        writePrice = updateData.p2wdbWritePrice || updateData.writePrice
       } else {
         // Approval transaction failed validation.
         console.log(`Approval TX was found to be invalid: ${approvalTxid}`)

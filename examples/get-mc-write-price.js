@@ -13,7 +13,8 @@ async function start () {
     // Instance the BCH wallet
     const wallet = new SlpWallet(undefined, {
       interface: 'consumer-api',
-      restURL: 'https://free-bch.fullstack.cash'
+      // restURL: 'https://free-bch.fullstack.cash'
+      restURL: 'https://dev-consumer.psfoundation.info'
     })
     await wallet.initialize()
 
