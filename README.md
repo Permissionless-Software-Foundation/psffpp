@@ -72,6 +72,21 @@ claimTxid: db338fdb7edc6ce6685c9897a9d9fd6f0e26d194bf12e1c87470b7dc2103a3e3
 */
 ```
 
+## Get Write Price History
+
+The write price changs over time. This function returns an array of objects, where each object returns the price change and the block height the change went into effect.
+
+```javascript
+const writeHistory = await psffpp.getWritePriceHistory()
+console.log(writeHistory)
+
+/*
+[
+  { writePrice: 0.03570889, height: 893165 },
+  { writePrice: 0.08335233, height: 780917 }
+]
+*/
+```
 
 # License
 [MIT](LICENSE.md)

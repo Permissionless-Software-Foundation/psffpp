@@ -9,8 +9,18 @@ import MultisigApproval from 'psf-multisig-approval'
 // Local libraries
 
 // Constants
-const PSF_HARDCODE_WRITE_PRICE = 0.08335233
+const PSF_HARDCODE_WRITE_PRICE = 0.03570889
 const WRITE_PRICE_ADDR = 'bitcoincash:qrwe6kxhvu47ve6jvgrf2d93w0q38av7s5xm9xfehr'
+const PSF_HARDCODE_WRITE_PRICE_HISTORY = [
+  {
+    writePrice: 0.03570889,
+    height: 893165
+  },
+  {
+    writePrice: 0.08335233,
+    blockHeight: 780917
+  }
+]
 
 class PSFFPP {
   constructor (localConfig = {}) {
@@ -32,6 +42,9 @@ class PSFFPP {
 
     // State
     this.currentWritePrice = null
+    this.priceRetrievalSucceeded = false
+    this.currentWritePriceHistory = null
+    this.priceHistoryRetrievalSucceeded = false
     this.filterTxids = []
   }
 
@@ -187,7 +200,7 @@ class PSFFPP {
 
     try {
       // Return the saved write price if this function has already been called once.
-      if (this.currentWritePrice) return this.currentWritePrice
+      if (this.currentWritePrice && this.priceRetrievalSucceeded) return this.currentWritePrice
 
       await this._initPs009()
 
@@ -230,6 +243,8 @@ class PSFFPP {
 
         // Return the write price from the update data.
         writePrice = updateData.p2wdbWritePrice || updateData.writePrice
+
+        this.priceRetrievalSucceeded = true
       } else {
         // Approval transaction failed validation.
         console.log(`Approval TX was found to be invalid: ${approvalTxid}`)
@@ -245,8 +260,11 @@ class PSFFPP {
       console.error('Error in getMcWritePrice(): ', err)
       console.log(`Using hard-coded, safety value of ${writePrice} PSF tokens per write.`)
     }
+
     // Save the curent write price to the state.
-    this.currentWritePrice = writePrice
+    if (this.priceRetrievalSucceeded) {
+      this.currentWritePrice = writePrice
+    }
     return writePrice
   }
 
@@ -255,11 +273,95 @@ class PSFFPP {
   // returns an array of objects. Each object contains a validated
   // price change, and the block height when the change took effect.
   async getWritePriceHistory () {
+    // Hard codeded value. 3/2/24
+    // This value is returned if there are any issues returning the write price.
+    // It should be higher than actual fee, so that any writes will propagate to
+    // the nodes that successfully retrieved the current write price.
+    // let writePrice = PSF_HARDCODE_WRITE_PRICE
+    const writePriceHistory = []
+
     try {
-      // Get the current write price.
+      // Return the saved write price if this function has already been called once.
+      if (this.currentWritePriceHistory && this.priceHistoryRetrievalSucceeded) {
+        return this.currentWritePriceHistory
+      }
+
+      await this._initPs009()
+
+      // Find the PS009 approval transaction the addresses tx history.
+      console.log('\nSearching blockchain for PSF write price update history...')
+      const approvals = await this.ps009.getAllApprovalTxs({
+        address: WRITE_PRICE_ADDR,
+        filterTxids: this.filterTxids
+      })
+      // console.log('approvals: ', JSON.stringify(approvals, null, 2))
+
+      // Throw an error if no approval transaction can be found in the
+      // transaction history.
+      if (!approvals || !approvals.length) {
+        throw new Error(`APPROVAL transaction could not be found in the TX history of ${WRITE_PRICE_ADDR}. Can not reach consensus on write price.`)
+      }
+
+      for (let i = 0; i < approvals.length; i++) {
+        const approvalObj = approvals[i]
+
+        // Retrieve the block height for the transaction. This data was made
+        // available in bch-api 2.6.2.
+        const height = approvalObj.approvalTxDetails.height
+        if (!height) {
+          throw new Error('TX block height not available. Be sure your back end is using bch-api 2.6.2 or later.')
+        }
+
+        const { approvalTxid, updateTxid } = approvalObj
+        console.log(`Validating approval txid ${approvalTxid}...`)
+
+        // Get the CID from the update transaction.
+        const updateObj = await this.ps009.getUpdateTx({ txid: updateTxid })
+        // console.log(`updateObj: ${JSON.stringify(updateObj, null, 2)}`)
+        const { cid } = updateObj
+
+        // Resolve the CID into JSON data from the IPFS gateway.
+        const updateData = await this.ps009.getCidData({ cid })
+        // console.log(`updateData: ${JSON.stringify(updateData, null, 2)}`)
+
+        // Validate the approval transaction
+        const approvalIsValid = await this.ps009.validateApproval({
+          approvalObj,
+          updateObj,
+          updateData
+        })
+
+        if (approvalIsValid) {
+          console.log('Approval TX validated.')
+          // console.log('updateData: ', updateData)
+
+          // Return the write price from the update data.
+          const writePrice = updateData.p2wdbWritePrice || updateData.writePrice
+
+          const entry = {
+            writePrice,
+            height
+          }
+
+          writePriceHistory.push(entry)
+          console.log(`writePriceHistory: ${JSON.stringify(writePriceHistory, null, 2)}`)
+        } else {
+          // Approval transaction failed validation.
+          console.log(`Approval TX was found to be invalid: ${approvalTxid}`)
+
+          // Add this invalid TXID to the filter array so that it is skipped.
+          this.filterTxids.push(approvalTxid)
+        }
+      }
+
+      this.priceHistoryRetrievalSucceeded = true
+      this.currentWritePriceHistory = writePriceHistory
+
+      return writePriceHistory
     } catch (err) {
       console.error('Error in getWritePriceHistory(): ', err)
-      throw err
+      console.log('Returning hard-coded write price history.')
+      return PSF_HARDCODE_WRITE_PRICE_HISTORY
     }
   }
 }
