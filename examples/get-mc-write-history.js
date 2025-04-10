@@ -1,5 +1,5 @@
 /* >
-  This example shows how to get the current write price set by the PSF Minting Council.
+  This example shows how to get the write price update history.
 */
 
 import SlpWallet from 'minimal-slp-wallet'
@@ -26,14 +26,14 @@ async function start () {
     console.log(`1st write price lookup started at ${now.toLocaleString()}`)
 
     // Get the current write price
-    const writePrice = await psffpp.getMcWritePrice()
+    const writePrice = await psffpp.getWritePriceHistory()
     console.log('1st writePrice: ', writePrice)
 
     now = new Date()
     console.log(`2nd write price lookup started at ${now.toLocaleString()}`)
 
     // Get the current write price
-    const writePrice2 = await psffpp.getMcWritePrice()
+    const writePrice2 = await psffpp.getWritePriceHistory()
     console.log('2nd writePrice: ', writePrice2)
 
     now = new Date()
