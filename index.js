@@ -30,6 +30,12 @@ class PSFFPP {
       throw new Error('Instance of minimal-slp-wallet must be passed in as a property called \'wallet\', when initializing the psf-multisig-approval library.')
     }
 
+    // Allow user to pass in alternative IPFS gateway.
+    this.ipfsGateway = localConfig.ipfsGateway
+    if (!this.ipfsGateway) {
+      this.ipfsGateway = 'https://free-bch.fullstack.cash'
+    }
+
     // Encapsulate dependencies
     this.bchjs = this.wallet.bchjs
     this.ps009 = null // placeholder for Multisig Approval library.
@@ -52,7 +58,12 @@ class PSFFPP {
   // initialized.
   async _initPs009 () {
     if (!this.ps009) {
-      this.ps009 = new MultisigApproval({ wallet: this.wallet })
+      const inObj = {
+        wallet: this.wallet,
+        ipfsGateway: this.ipfsGateway
+      }
+      // console.log('inObj: ', inObj)
+      this.ps009 = new MultisigApproval(inObj)
     }
 
     return true
