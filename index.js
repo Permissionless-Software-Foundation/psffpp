@@ -9,6 +9,17 @@ import MultisigApproval from 'psf-multisig-approval'
 // Local libraries
 
 // Constants
+
+// Lokad of a Pin Claim OP_RETURN (PS010 §5.1). The script prefix of a valid
+// claim is `6a04` + this value.
+const CLAIM_LOKAD = '00510000'
+
+// Bytes in a megabyte, per PS010 §3 (decimal MB, not MiB).
+const BYTES_PER_MB = 1000000
+
+// The locked minimum charge, expressed in bytes: 100 KB (PS010 §3).
+const MIN_CHARGE_BYTES = 100000
+
 const PSF_HARDCODE_WRITE_PRICE = 0.03570889
 const WRITE_PRICE_ADDR = 'bitcoincash:qrwe6kxhvu47ve6jvgrf2d93w0q38av7s5xm9xfehr'
 const PSF_HARDCODE_WRITE_PRICE_HISTORY = [
@@ -42,7 +53,10 @@ class PSFFPP {
 
     // Bind the this object to all subfunctions in this class
     this._initPs009 = this._initPs009.bind(this)
+    this._buildClaimScript = this._buildClaimScript.bind(this)
+    this._broadcastClaim = this._broadcastClaim.bind(this)
     this.createPinClaim = this.createPinClaim.bind(this)
+    this.createPinClaimBCH = this.createPinClaimBCH.bind(this)
     this.getMcWritePrice = this.getMcWritePrice.bind(this)
     this.getWritePriceHistory = this.getWritePriceHistory.bind(this)
 
@@ -69,10 +83,123 @@ class PSFFPP {
     return true
   }
 
+  // Build the OP_RETURN script of a Pin Claim:
+  //   OP_RETURN | 00510000 | paymentTxid(32B) | cid | filename
+  //
+  // PS010 §5.1-5.2: field 2 is the raw 32 bytes of the BCH payment txid that
+  // paid for the pin. Both the (deprecated) PSF proof-of-burn path and the BCH
+  // payment path go through this helper, so the two cannot diverge.
+  //
+  // Returns the compiled script, as a Buffer (scriptPubKey of vout[0]).
+  _buildClaimScript (inObj = {}) {
+    const { paymentTxid, cid, filename } = inObj
+
+    // Input validation
+    if (!paymentTxid) {
+      throw new Error('paymentTxid required to build a pin claim.')
+    }
+    if (typeof paymentTxid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(paymentTxid)) {
+      throw new Error(`paymentTxid must be a 32 byte (64 hex character) txid. Got: ${paymentTxid}`)
+    }
+    if (!cid) {
+      throw new Error('cid required to generate pin claim.')
+    }
+    if (!filename) {
+      throw new Error('filename required to generate pin claim.')
+    }
+
+    // The OP_RETURN, with the payment txid in field 2.
+    const script = [
+      this.bchjs.Script.opcodes.OP_RETURN,
+      Buffer.from(CLAIM_LOKAD, 'hex'),
+      Buffer.from(paymentTxid, 'hex'),
+      Buffer.from(cid),
+      Buffer.from(filename)
+    ]
+
+    // Compile the script array into a bitcoin-compliant script Buffer.
+    const data = this.bchjs.Script.encode(script)
+
+    return data
+  }
+
+  // Build, sign, and broadcast a Pin Claim transaction that carries the claim
+  // OP_RETURN for the given payment txid.
+  //
+  // This helper takes control of the wallet: it spends the biggest BCH UTXO of
+  // the wallet and sends the remainder back to the wallet address. It returns
+  // the claim txid. It does no pricing, and it does not move any tokens.
+  async _broadcastClaim (inObj = {}) {
+    const { paymentTxid, cid, filename } = inObj
+
+    // Build the claim OP_RETURN. Input validation happens in _buildClaimScript().
+    const data = this._buildClaimScript({ paymentTxid, cid, filename })
+
+    const bchjs = this.bchjs
+    const addr = this.wallet.walletInfo.address
+    const wif = this.wallet.walletInfo.privateKey
+
+    // Get a UTXO to spend to generate the pin claim TX.
+    let utxos = await this.wallet.getUtxos()
+    utxos = utxos.bchUtxos
+    const utxo = bchjs.Utxo.findBiggestUtxo(utxos)
+
+    // instance of transaction builder
+    const transactionBuilder = new bchjs.TransactionBuilder()
+
+    const originalAmount = utxo.value
+    const vout = utxo.tx_pos
+    const txid = utxo.tx_hash
+
+    // add input with txid and index of vout
+    transactionBuilder.addInput(txid, vout)
+
+    // TODO: Compute the 1 sat/byte fee.
+    const fee = 500
+
+    // Add the OP_RETURN output.
+    transactionBuilder.addOutput(data, 0)
+
+    // Send the same amount - fee.
+    transactionBuilder.addOutput(addr, originalAmount - fee)
+
+    // Create an EC Key Pair from the user-supplied WIF.
+    const ecPair = bchjs.ECPair.fromWIF(wif)
+
+    // Sign the transaction with the HD node.
+    let redeemScript
+    transactionBuilder.sign(
+      0,
+      ecPair,
+      redeemScript,
+      transactionBuilder.hashTypes.SIGHASH_ALL,
+      originalAmount
+    )
+
+    // build tx
+    const tx = transactionBuilder.build()
+
+    // output rawhex
+    const hex = tx.toHex().toString()
+    // console.log(`TX hex: ${hex}`)
+
+    // Broadcast transation to the network
+    const claimTxid = await this.wallet.broadcast({ hex })
+    // console.log(`Claim Transaction ID: ${claimTxid}`)
+    // console.log(`https://blockchair.com/bitcoin-cash/transaction/${claimTxid}`)
+
+    return claimTxid
+  }
+
   // Given information about a file, this function will generate a Pin Claim.
   // This function takes controls of the wallet and uses it to broadcast two
-  // transactions: a Proof-of-Burn (pobTxid) and a Pin Claim (climTxid). The
+  // transactions: a Proof-of-Burn (pobTxid) and a Pin Claim (claimTxid). The
   // function returns an object with the transaction ID of those two transacions.
+  //
+  // @deprecated PS010 v2.0.0 removes PSF proof-of-burn as a payment method
+  // (spec §8.2). Use createPinClaimBCH() instead: the user pays sats to the
+  // pin-service payout address, and that payment txid goes in field 2 of the
+  // claim. This burn path is retained only until it is deleted in M5.
   async createPinClaim (inObj = {}) {
     let targetAddr
 
@@ -104,11 +231,9 @@ class PSFFPP {
       // const WRITE_PRICE = 0.08335233 // Cost in PSF tokens to pin 1MB
       const PSF_TOKEN_ID = '38e97c5d7d3585a2cbf3f9580c82ca33985f9cb0845d4dcce220cb709f9538b0'
 
-      // Get info and libraries from the wallet.
+      // Get the address of the wallet.
       const addr = this.wallet.walletInfo.address
       targetAddr = addr
-      const bchjs = this.wallet.bchjs
-      const wif = this.wallet.walletInfo.privateKey
 
       // Calculate the write cost
       const dataCost = writePrice * fileSizeInMegabytes
@@ -118,75 +243,13 @@ class PSFFPP {
       console.log(`Burning ${actualCost} PSF tokens for ${fileSizeInMegabytes} MB of data.`)
 
       const pobTxid = await this.wallet.burnTokens(actualCost, PSF_TOKEN_ID)
-      // console.log(`Proof-of-burn TX: ${pobT  xid}`)
+      // console.log(`Proof-of-burn TX: ${pobTxid}`)
 
       // Wait for the indexer to update before get utxos.
       await this.bchjs.Util.sleep(6000)
 
-      // Get a UTXO to spend to generate the pin claim TX.
-      let utxos = await this.wallet.getUtxos()
-      utxos = utxos.bchUtxos
-      const utxo = bchjs.Utxo.findBiggestUtxo(utxos)
-
-      // instance of transaction builder
-      const transactionBuilder = new bchjs.TransactionBuilder()
-
-      const originalAmount = utxo.value
-      const vout = utxo.tx_pos
-      const txid = utxo.tx_hash
-
-      // add input with txid and index of vout
-      transactionBuilder.addInput(txid, vout)
-
-      // TODO: Compute the 1 sat/byte fee.
-      const fee = 500
-
-      // BEGIN - Construction of OP_RETURN transaction.
-
-      // Add the OP_RETURN to the transaction.
-      const script = [
-        bchjs.Script.opcodes.OP_RETURN,
-        Buffer.from('00510000', 'hex'),
-        Buffer.from(pobTxid, 'hex'),
-        Buffer.from(cid),
-        Buffer.from(filename)
-      ]
-
-      // Compile the script array into a bitcoin-compliant hex encoded string.
-      const data = bchjs.Script.encode(script)
-
-      // Add the OP_RETURN output.
-      transactionBuilder.addOutput(data, 0)
-
-      // END - Construction of OP_RETURN transaction.
-
-      // Send the same amount - fee.
-      transactionBuilder.addOutput(addr, originalAmount - fee)
-
-      // Create an EC Key Pair from the user-supplied WIF.
-      const ecPair = bchjs.ECPair.fromWIF(wif)
-
-      // Sign the transaction with the HD node.
-      let redeemScript
-      transactionBuilder.sign(
-        0,
-        ecPair,
-        redeemScript,
-        transactionBuilder.hashTypes.SIGHASH_ALL,
-        originalAmount
-      )
-
-      // build tx
-      const tx = transactionBuilder.build()
-
-      // output rawhex
-      const hex = tx.toHex().toString()
-      // console.log(`TX hex: ${hex}`)
-
-      // Broadcast transation to the network
-      const claimTxid = await this.wallet.broadcast({ hex })
-      // console.log(`Claim Transaction ID: ${claimTxid}`)
-      // console.log(`https://blockchair.com/bitcoin-cash/transaction/${claimTxid}`)
+      // Generate the Pin Claim TX, with the proof-of-burn txid in field 2.
+      const claimTxid = await this._broadcastClaim({ paymentTxid: pobTxid, cid, filename })
 
       return {
         pobTxid,
@@ -194,6 +257,47 @@ class PSFFPP {
       }
     } catch (err) {
       console.error(`Error in psffpp/createPinClaim() with target addr ${targetAddr}`)
+      throw err
+    }
+  }
+
+  // Generate a Pin Claim that references a BCH payment (PS010 v2.0.0 §5-6).
+  //
+  // The user has already paid the required sats to the pin-service payout
+  // address; `paymentTxid` is that payment transaction. This function builds
+  // and broadcasts the claim OP_RETURN with the payment txid in field 2.
+  //
+  // There is no pricing and no token logic here: the amount paid is validated
+  // by the pin-service (spec §7), not by the client.
+  //
+  // Returns { paymentTxid, claimTxid }.
+  async createPinClaimBCH (inObj = {}) {
+    try {
+      const { cid, filename, paymentTxid } = inObj
+
+      // Input validation
+      if (!cid) {
+        throw new Error('cid required to generate pin claim.')
+      }
+      if (!filename) {
+        throw new Error('filename required to generate pin claim.')
+      }
+      if (!paymentTxid) {
+        throw new Error('paymentTxid required to generate a BCH pin claim.')
+      }
+
+      // Initialize the wallet, so the claim TX can be funded.
+      await this.wallet.initialize()
+
+      // Build, sign, and broadcast the claim TX.
+      const claimTxid = await this._broadcastClaim({ paymentTxid, cid, filename })
+
+      return {
+        paymentTxid,
+        claimTxid
+      }
+    } catch (err) {
+      console.error('Error in psffpp/createPinClaimBCH()')
       throw err
     }
   }
@@ -376,6 +480,49 @@ class PSFFPP {
     }
   }
 }
+
+// Fee schedule math for PS010 v2.0.0 (BCH payment model).
+//
+//   requiredSatsBCH({ fileSizeBytes, satsPerMb }) =
+//       max( ceil( fileSizeBytes / 1e6 * satsPerMb ),
+//            ceil( 0.1 * satsPerMb ) )
+//
+// The second term is the locked 100 KB minimum charge (PS010 §3). The floor is a
+// pricing rule that lives inside this helper; callers MUST NOT re-derive a floor
+// of their own.
+//
+// NOTE: PS010 §3 defines this function once, in the shared psffpp-payments
+// library, and has both the announcer and the pin-service import it from there.
+// Until that library ships, this is the client-side copy of the same definition
+// (the pin-service carries its own copy of the identical formula). Do not let
+// the two drift: the unit tests pin the floor boundaries and the integer-math
+// behaviour.
+export function requiredSatsBCH (inObj = {}) {
+  const { fileSizeBytes, satsPerMb } = inObj
+
+  // Input validation. Throw rather than quoting a NaN/undefined price.
+  if (typeof fileSizeBytes !== 'number' || !Number.isFinite(fileSizeBytes) || fileSizeBytes < 0) {
+    throw new Error('requiredSatsBCH() fileSizeBytes must be a finite number >= 0')
+  }
+  if (typeof satsPerMb !== 'number' || !Number.isFinite(satsPerMb) || satsPerMb <= 0) {
+    throw new Error('requiredSatsBCH() satsPerMb must be a finite number > 0')
+  }
+
+  // Metered charge. Integer multiplication first, to avoid floating point drift
+  // (e.g. 100000 / 1e6 * 2000 = 200.00000000000003 in IEEE 754, which would
+  // ceil to 201 and overcharge a file that is exactly 100 KB).
+  const meteredSats = Math.ceil((fileSizeBytes * satsPerMb) / BYTES_PER_MB)
+
+  // 100 KB minimum charge. Same trick: satsPerMb / 10, not 0.1 * satsPerMb.
+  const floorSats = Math.ceil(satsPerMb / (BYTES_PER_MB / MIN_CHARGE_BYTES))
+
+  return Math.max(meteredSats, floorSats)
+}
+
+// Also expose the fee-schedule helper as a static property of the class, so
+// that consumers which only import the default export can reach it without a
+// named import.
+PSFFPP.requiredSatsBCH = requiredSatsBCH
 
 // module.exports = PSFFPP
 export default PSFFPP
