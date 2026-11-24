@@ -196,46 +196,74 @@ describe('#BCH-claim-builder', () => {
   })
 
   describe('#requiredSatsBCH', () => {
-    it('should charge the 100 KB floor for small files', () => {
-      // 50 KB with a 2000 sats/MB rate → floor of ceil(0.1 * 2000) = 200.
-      assert.equal(requiredSatsBCH({ fileSizeBytes: 50000, satsPerMb: 2000 }), 200)
+    it('should charge the dust-bounded floor for small files', () => {
+      // 50 KB with a 2000 sats/MB rate → 100 KB floor of ceil(0.1 * 2000) = 200,
+      // bounded below by the 546-sat dust limit.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 50000, satsPerMb: 2000 }), 546)
     })
 
-    it('should charge the floor for an empty file', () => {
-      assert.equal(requiredSatsBCH({ fileSizeBytes: 0, satsPerMb: 2000 }), 200)
+    it('should charge the dust-bounded floor for an empty file', () => {
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 0, satsPerMb: 2000 }), 546)
     })
 
-    it('should charge the floor at exactly 100 KB, without floating point drift', () => {
+    it('should charge the dust-bounded floor at exactly 100 KB, without floating point drift', () => {
       // 100000 / 1e6 * 2000 = 200.00000000000003 in IEEE 754, which would ceil
-      // to 201 if the naive formula were used. The floor must be met exactly.
-      assert.equal(requiredSatsBCH({ fileSizeBytes: 100000, satsPerMb: 2000 }), 200)
+      // to 201 if the naive formula were used. The floor must be met exactly,
+      // and it must not fall below the dust limit.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 100000, satsPerMb: 2000 }), 546)
     })
 
-    it('should meter files above 100 KB', () => {
-      assert.equal(requiredSatsBCH({ fileSizeBytes: 150000, satsPerMb: 2000 }), 300)
+    it('should not let a high satsPerMb sink below its own 100 KB floor', () => {
+      // At 6000 sats/MB the 100 KB floor (600) already exceeds the dust limit,
+      // so the floor rule wins.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 50000, satsPerMb: 6000 }), 600)
+    })
+
+    it('should meter files above the dust threshold', () => {
+      // 300 KB at 2000 sats/MB = 600 sats, above the 546-sat dust floor.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 300000, satsPerMb: 2000 }), 600)
       assert.equal(requiredSatsBCH({ fileSizeBytes: 1000000, satsPerMb: 2000 }), 2000)
       assert.equal(requiredSatsBCH({ fileSizeBytes: 2500000, satsPerMb: 2000 }), 5000)
     })
 
-    it('should round up metered amounts', () => {
-      // 100001 bytes at 2000 sats/MB = 200.002 sats → 201.
-      assert.equal(requiredSatsBCH({ fileSizeBytes: 100001, satsPerMb: 2000 }), 201)
-      // 123456 bytes at 2500 sats/MB = 308.64 sats → 309.
-      assert.equal(requiredSatsBCH({ fileSizeBytes: 123456, satsPerMb: 2500 }), 309)
+    it('should cross from the dust floor into metered pricing at 546 sats', () => {
+      // At 2000 sats/MB, metered amount reaches 546 sats at 273,000 bytes.
+      // 273,000 bytes = 546 sats, equal to the dust floor.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 273000, satsPerMb: 2000 }), 546)
+      // 273,001 bytes = 546.002 sats → 547, above the floor.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 273001, satsPerMb: 2000 }), 547)
+    })
+
+    it('should floor the current PSFFPP production rate at the dust limit', () => {
+      // The production rate of 5084 sats/MB gives a 100 KB floor of 509 sats,
+      // which is below the dust limit — the dust bound must lift it to 546.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 100000, satsPerMb: 5084 }), 546)
+      // Small files below ~107 KB stay at the dust floor.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 1000, satsPerMb: 5084 }), 546)
+    })
+
+    it('should round up metered amounts above the dust floor', () => {
+      // 100001 bytes at 6000 sats/MB = 600.006 sats → 601 (above the 546 dust floor).
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 100001, satsPerMb: 6000 }), 601)
+      // 123456 bytes at 7000 sats/MB = 864.192 sats → 865.
+      assert.equal(requiredSatsBCH({ fileSizeBytes: 123456, satsPerMb: 7000 }), 865)
     })
 
     it('should match the pinned pin-service formula', () => {
       // Parity check against the definition in PS010 §3, as implemented by
       // ipfs-file-pin-service src/use-cases/required-sats.js. Integer
-      // multiplication first, so the two copies cannot drift.
+      // multiplication first, so the two copies cannot drift. Both copies
+      // dust-bound the floor at 546.
       const sizes = [0, 1, 1000, 50000, 99999, 100000, 100001, 150000, 999999, 1000000, 12345678]
       const rates = [1, 100, 2000, 2500, 100000]
+      const DUST_SATS = 546
 
       for (const satsPerMb of rates) {
         for (const fileSizeBytes of sizes) {
           const expected = Math.max(
             Math.ceil((fileSizeBytes * satsPerMb) / 1000000),
-            Math.ceil(satsPerMb / 10)
+            Math.ceil(satsPerMb / 10),
+            DUST_SATS
           )
 
           assert.equal(
