@@ -20,6 +20,12 @@ const BYTES_PER_MB = 1000000
 // The locked minimum charge, expressed in bytes: 100 KB (PS010 §3).
 const MIN_CHARGE_BYTES = 100000
 
+// BCH standard dust limit. An output below this value is uneconomical to
+// spend and relaying nodes refuse to broadcast it ("dust" rejection). A
+// pricing floor below the dust limit would quote amounts that could never be
+// paid, so the minimum charge is always at least this many satoshis.
+const DUST_SATS = 546
+
 const PSF_HARDCODE_WRITE_PRICE = 0.03570889
 const WRITE_PRICE_ADDR = 'bitcoincash:qrwe6kxhvu47ve6jvgrf2d93w0q38av7s5xm9xfehr'
 const PSF_HARDCODE_WRITE_PRICE_HISTORY = [
@@ -485,11 +491,15 @@ class PSFFPP {
 //
 //   requiredSatsBCH({ fileSizeBytes, satsPerMb }) =
 //       max( ceil( fileSizeBytes / 1e6 * satsPerMb ),
-//            ceil( 0.1 * satsPerMb ) )
+//            ceil( 0.1 * satsPerMb ),
+//            546 )
 //
 // The second term is the locked 100 KB minimum charge (PS010 §3). The floor is a
 // pricing rule that lives inside this helper; callers MUST NOT re-derive a floor
-// of their own.
+// of their own. The third term dust-bounds the floor: a quote below the BCH dust
+// limit (546 sats) can never be paid, because the broadcast node rejects it.
+// Operators who set satsPerMb low enough that the 100 KB charge sits under the
+// dust limit still get a spendable quote.
 //
 // NOTE: PS010 §3 defines this function once, in the shared psffpp-payments
 // library, and has both the announcer and the pin-service import it from there.
@@ -514,7 +524,12 @@ export function requiredSatsBCH (inObj = {}) {
   const meteredSats = Math.ceil((fileSizeBytes * satsPerMb) / BYTES_PER_MB)
 
   // 100 KB minimum charge. Same trick: satsPerMb / 10, not 0.1 * satsPerMb.
-  const floorSats = Math.ceil(satsPerMb / (BYTES_PER_MB / MIN_CHARGE_BYTES))
+  // The floor is additionally bounded below by the dust limit, so that a
+  // low satsPerMb can never produce an unpayable quote.
+  const floorSats = Math.max(
+    Math.ceil(satsPerMb / (BYTES_PER_MB / MIN_CHARGE_BYTES)),
+    DUST_SATS
+  )
 
   return Math.max(meteredSats, floorSats)
 }

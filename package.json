@@ -1,6 +1,6 @@
 {
   "name": "psffpp",
-  "version": "1.0.0",
+  "version": "1.4.1",
   "description": "PS010 PSF File Pinning Protocol",
   "main": "index.js",
   "type": "module",
