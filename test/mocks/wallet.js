@@ -21,6 +21,9 @@ class MockBchWallet {
     this.burnTokens = async () => {
       return 'txid'
     }
+    this.getPsfWritePrice = async () => {
+      return 0.08335233
+    }
     this.sendTokens = async () => {
       return 'fakeTxid'
     }
